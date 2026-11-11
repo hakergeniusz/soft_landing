@@ -1,0 +1,54 @@
+[mod]
+id = "soft_landing"
+version = "1.0.0"
+priority = 100
+
+# The commit it was tested on: it sits at the head of the game's own fall
+# hook and the every-tick hook, so a Horizon change in the landing or
+# native-hook sources needs a re-check.
+[compatibility]
+horizon_revision = "2ebf00a0281c592f79191e76fce0e7d522c6f425"
+
+# The mod's brain: pure standard library, no game types, tested on its own —
+# which falls are canceled (only the captured local player's own).
+[[module]]
+id = "runtime"
+file = "crates/horizon-client/src/landing.rs"
+name = "soft_landing"
+source = "runtime.rs"
+
+# The captured local player's entity id, written by the window's tick and
+# read by the server thread's fall handling. Pub: the capture helper runs in
+# another crate's module (the game's native tick hooks).
+[[module]]
+id = "gate"
+file = "crates/horizon-client/src/landing.rs"
+name = "gate"
+source = "gate.rs"
+visibility = "pub"
+
+# A living entity is about to handle a fall: for the captured local player
+# the whole handling is canceled (no damage; the block's fallOn still runs,
+# the caller lands them either way).
+[[injection]]
+id = "fall"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::landing::native_living_fall"
+helper = "fall.rs"
+bindings = [
+  { name = "entity", ty = "u32", value = "entity" },
+  { name = "kind", ty = "&str", value = "kind" },
+  { name = "cancel", ty = "&mut bool", value = "cancel" },
+]
+
+# Every tick, in every Game: the window's Game alone writes the local
+# player's entity id; the server thread reads it.
+[[injection]]
+id = "capture"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_tick"
+helper = "capture.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
