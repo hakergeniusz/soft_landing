@@ -1,6 +1,6 @@
 [mod]
 id = "soft_landing"
-version = "1.0.0"
+version = "1.1.0"
 priority = 100
 
 # The commit it was tested on: it sits at the head of the game's own fall
@@ -43,7 +43,9 @@ bindings = [
 ]
 
 # Every tick, in every Game: the window's Game alone writes the local
-# player's entity id; the server thread reads it.
+# player's entity id; the server thread reads it. It also publishes whether
+# its world is open to the network (the LAN host flag) and syncs the saved
+# guest-protection choice once per process.
 [[injection]]
 id = "capture"
 kind = "HEAD"
@@ -51,4 +53,39 @@ target = "horizon_client::game::native_hooks::Game<'_>::native_tick"
 helper = "capture.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+]
+
+# The row in Options > Mods: the mod and what it does.
+[[injection]]
+id = "list"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_mods"
+helper = "list.rs"
+bindings = [
+  { name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" },
+]
+
+# The settings page: the guest-protection toggle and a live hosting note.
+[[injection]]
+id = "settings"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings"
+helper = "settings.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "buttons", ty = "&mut Vec<String>", value = "&mut *buttons" },
+]
+
+# A click on the settings page: button 0 toggles guest protection and saves
+# the choice to config/soft_landing/guests.txt.
+[[injection]]
+id = "settings-click"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_settings_click"
+helper = "setting_click.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "mod_id", ty = "&str", value = "mod_id" },
+  { name = "button", ty = "usize", value = "button" },
 ]

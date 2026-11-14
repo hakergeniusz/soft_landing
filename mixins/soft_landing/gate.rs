@@ -11,12 +11,21 @@
 // hurt again.
 //
 // Copyright (c) 2026 hakergeniusz. MIT.
+use std::fs;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Once;
 
 /// Whether a capture is held at all (an entity id of zero is a real id).
 static PRESENT: AtomicBool = AtomicBool::new(false);
 /// The captured local player's entity id.
 static CAPTURED: AtomicU32 = AtomicU32::new(0);
+/// Whether the window's world is open to the network — the LAN host flag the
+/// window's tick publishes and the server thread's fall handling reads.
+static HOSTING: AtomicBool = AtomicBool::new(false);
+/// Whether guests on a hosted world fall under the mod too (the saved
+/// choice; the default is on).
+static PROTECT: AtomicBool = AtomicBool::new(true);
 
 /// The window's tick: remember the local player's entity id.
 pub fn capture(id: u32) {
@@ -37,6 +46,39 @@ pub fn captured() -> Option<u32> {
     } else {
         None
     }
+}
+
+/// The window's tick publishes whether this world is open to the network.
+pub fn hosting(on: bool) {
+    HOSTING.store(on, Ordering::Release);
+}
+
+/// Whether the world is open to the network right now.
+pub fn is_hosting() -> bool {
+    HOSTING.load(Ordering::Acquire)
+}
+
+/// Whether guests on a hosted world fall under the mod.
+pub fn protects_guests() -> bool {
+    PROTECT.load(Ordering::Acquire)
+}
+
+/// The settings page's toggle (and the saved choice at startup) set this.
+pub fn set_protects_guests(on: bool) {
+    PROTECT.store(on, Ordering::Release);
+}
+
+/// Once per process: the saved choice (`<config>/soft_landing/guests.txt`)
+/// overrides the default. `None` just marks the sync done.
+pub fn sync_saved(config_dir: Option<&Path>) {
+    static DONE: Once = Once::new();
+    DONE.call_once(|| {
+        if let Some(dir) = config_dir {
+            if let Ok(text) = fs::read_to_string(dir.join("soft_landing").join("guests.txt")) {
+                PROTECT.store(text.trim().eq_ignore_ascii_case("on"), Ordering::Release);
+            }
+        }
+    });
 }
 
 #[cfg(test)]
